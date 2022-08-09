@@ -56,7 +56,6 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            IconButton(onPressed: (){MyServer.getInstance().stop();}, icon: Icon(Icons.stop_circle), color: Colors.white,),
             Expanded(
               child: ListView.builder(
                 itemCount: servicesFound.length,
