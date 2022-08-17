@@ -11,58 +11,39 @@ class MyServer{
   );
   BonsoirBroadcast? broadcast;
 
-  
-    List hostCandidates=[];
-    List clientCandidates=[];
 
-    Map answer={};
-    Map offer={};
-    Map sdp={};
+    List clients=[];
 
 
   MyServer._(){
     _io = Server();
     
-    _io!.on('connection', (client) {
+   _io!.on('connection', (client) {
       print('connected to $client');
+
+
       
+      client.emit('index', clients.length);      
+      clients.add(client);
+      client.join('dummy');
 
-      client.emit('connected',{'client-candidates':clientCandidates,'host-candidates':hostCandidates});
-
-      client.on('set-offer',(data){
-        offer=data;
-        _io!.emit('offer-recieved', data);
+      client.on('disconnect',(_){
+        clients.removeWhere((e)=>e.id==client.id);
       });
 
-      client.on('set-answer',(data){
-        answer=data['answer'];
-        print(answer);
-        _io!.emit('answer-recieved', answer);
+      client.on('send-offer',(data){
+        client.to(clients[data['to']].id).emit('offer-recieved',data);
       });
 
-      client.on('add-client-candidate', (data){
-        clientCandidates.add(data['candidate']);
-        _io!.emit('client-candidate-update',{'candidates':clientCandidates});
+      client.on('send-answer',(data){
+        client.to(clients[data['to']].id).emit('answer-recieved',data);
       });
 
-      client.on('add-host-candidate', (data){
-        hostCandidates.add(data['candidate']);
-        _io!.emit('host-candidate-update',{'candidates':hostCandidates});
+      client.on('add-candidate',(data){
+        client.to(clients[data['to']].id).emit('candidate-recieved',data);
       });
-
-      client.on('hang-up',(_){
-        print('hangup');
-
-        hostCandidates.clear();
-        clientCandidates.clear();
-        answer={};
-        sdp={};
-        offer={};
-      });
-
 
     });
-
     broadcastServer();
   }
 
@@ -93,12 +74,6 @@ class MyServer{
   stop(){
     _io!.close();
     broadcast!.stop();
-    hostCandidates.clear();
-    clientCandidates.clear();
-    answer={};
-    sdp={};
-    offer={};
-
     broadcastServer();
   }
 

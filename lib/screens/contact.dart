@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/src/foundation/key.dart';
 import 'package:flutter/src/widgets/framework.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -17,27 +18,30 @@ class ContactScreen extends StatefulWidget {
 
 class _ContactScreenState extends State<ContactScreen> {
 
-  RTCVideoRenderer _localRenderer = RTCVideoRenderer();
-  RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
+  final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
+  final Map<String ,RTCVideoRenderer> _remoteRenderers={};
+
 
   late SignalingClient client;
   bool isHost=true;
-
+  bool loading=true;
 
   @override
   void initState() {
     _localRenderer.initialize();
-    _remoteRenderer.initialize();
-    isHost=widget.serverAddress=='localhost';
-    
-    client=SignalingClient(widget.serverAddress,isHost);
+       
+    client=SignalingClient(widget.serverAddress,isHost, _localRenderer);
 
-    client.onAddRemoteStream = ((stream) {
-      _remoteRenderer.srcObject = stream;
+     client.initialize().then((val){
+      setState(() {loading=false;});
+     });
+
+    client.onAddRemoteStream = ((stream) async{
+      var renderer= RTCVideoRenderer();      
+      await renderer.initialize();
+      _remoteRenderers[stream.id]=renderer;
+      renderer.srcObject=stream;
       setState(() {});
-    });
-    client.initialize(_localRenderer, _remoteRenderer).then((value){
-      _localRenderer.srcObject!.getAudioTracks()[0].enabled=false;
     });
 
     super.initState();
@@ -48,7 +52,9 @@ class _ContactScreenState extends State<ContactScreen> {
 
   Talk(){
     _localRenderer.srcObject!.getAudioTracks()[0].enabled=true;
-    if(_remoteRenderer.srcObject!.getAudioTracks().isNotEmpty)_remoteRenderer.srcObject!.getAudioTracks()[0].enabled=true;
+    _remoteRenderers.forEach((key,element) async{
+      element.srcObject!.getAudioTracks()[0].enabled=false;
+    });
     setState(() {
       speak=true;
     });
@@ -56,8 +62,10 @@ class _ContactScreenState extends State<ContactScreen> {
 
 
   Listen(){
-    if(_remoteRenderer.srcObject!.getAudioTracks().isNotEmpty)_remoteRenderer.srcObject!.getAudioTracks()[0].enabled=true;
     _localRenderer.srcObject!.getAudioTracks()[0].enabled=false;
+    _remoteRenderers.forEach((key,element) async{
+      element.srcObject!.getAudioTracks()[0].enabled=true;
+    });
     setState(() {
       speak=false;
     });
@@ -69,13 +77,14 @@ class _ContactScreenState extends State<ContactScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      appBar: AppBar(),
       body: SafeArea(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Center(
-              child: GestureDetector(
+              child: loading?CircularProgressIndicator():GestureDetector(
                 onTapDown: (details){Talk();},
                 onTapCancel: (){Listen();},
                 onTapUp: (details){Listen();},
